@@ -1,0 +1,143 @@
+name: 🚀 Deploy
+on:
+    push:
+        branches:
+            - main
+    workflow_dispatch:
+
+concurrency:
+    group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+    cancel-in-progress: true
+
+permissions:
+    pages: write
+    contents: write
+
+jobs:
+    deploy-doc:
+        name: 🚀 Deploy (doc)
+        runs-on: ubuntu-latest
+        timeout-minutes: 5
+
+        env:
+          PRODUCTION_REMOTE: https://git:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}
+
+        steps:
+            - name: 📥 Checkout repo
+              uses: actions/checkout@v4
+
+            - name: ⚙️ Setup node
+              uses: actions/setup-node@v4
+              with:
+                  node-version: 24
+                  cache: npm
+
+            - name: ⚙️ Setup git
+              run: |
+                git remote set-url origin https://git:${{ secrets.GITHUB_TOKEN }}@github.com/${GITHUB_REPOSITORY}
+                git config --global user.email support+actions@github.com
+                git config --global user.name github-actions-bot
+
+            - name: 📥 Download deps
+              run: make doc-install
+
+            - name: 🔨 Build Registry
+              run: make registry-build
+
+            - name: 🔨 Build Documentation
+              run: make doc-build
+
+            - name: 📡 Deploy Registry
+              run: make registry-deploy
+
+            - name: 📡 Deploy Documentation
+              run: make doc-deploy
+
+    deploy-demo:
+        name: 🚀 Deploy (demo)
+        if: ${{ vars.DEMO_DEPLOY_REPOSITORY != '' }}
+        runs-on: ubuntu-latest
+        timeout-minutes: 10
+
+        env:
+            VITE_IS_DEMO: true
+            VITE_INBOUND_EMAIL: ${{ vars.VITE_INBOUND_EMAIL }}
+            VITE_ATTACHMENTS_BUCKET: ${{ vars.VITE_ATTACHMENTS_BUCKET || 'attachments' }}
+            PRODUCTION_REMOTE: https://git:${{ secrets.DEPLOY_TOKEN || secrets.GITHUB_TOKEN }}@github.com/${{ vars.DEMO_DEPLOY_REPOSITORY }}
+
+        steps:
+            - name: 📥 Checkout repo
+              uses: actions/checkout@v4
+
+            - name: ⚙️ Setup node
+              uses: actions/setup-node@v4
+              with:
+                  node-version: 24
+                  cache: npm
+
+            - name: ⚙️ Setup git
+              run: |
+                  echo Deploying to pages to ${{ vars.DEMO_DEPLOY_REPOSITORY }}
+                  git remote set-url origin https://git:${{ secrets.DEPLOY_TOKEN || secrets.GITHUB_TOKEN }}@github.com/${{ vars.DEMO_DEPLOY_REPOSITORY }}
+                  git remote add production $PRODUCTION_REMOTE
+                  git config --global user.email support+actions@github.com
+                  git config --global user.name github-actions-bot
+
+            - name: 📥 Download deps
+              run: npm ci
+
+            - name: 🔨 Build
+              run: npm run build:demo
+
+            - name: 📡 Deploy GitHub pages
+              run: npx gh-pages --remote production -d dist -b ${{ vars.DEPLOY_BRANCH || 'gh-pages' }}
+              env:
+                  GITHUB_TOKEN: ${{ secrets.DEPLOY_TOKEN || secrets.GITHUB_TOKEN }}
+
+    deploy-supabase:
+        name: 🚀 Deploy (supabase)
+        runs-on: ubuntu-latest
+        timeout-minutes: 10
+
+        env:
+            SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+            SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+            SUPABASE_PROJECT_ID: ${{ secrets.SUPABASE_PROJECT_ID }}
+            IS_SUPABASE_CONFIGURED: ${{ secrets.SUPABASE_ACCESS_TOKEN && secrets.SUPABASE_DB_PASSWORD && secrets.SUPABASE_PROJECT_ID }}
+            VITE_INBOUND_EMAIL: ${{ vars.VITE_INBOUND_EMAIL }}
+            VITE_ATTACHMENTS_BUCKET: ${{ vars.VITE_ATTACHMENTS_BUCKET || 'attachments' }}
+            POSTMARK_WEBHOOK_USER: ${{ secrets.POSTMARK_WEBHOOK_USER }}
+            POSTMARK_WEBHOOK_PASSWORD: ${{ secrets.POSTMARK_WEBHOOK_PASSWORD }}
+            POSTMARK_WEBHOOK_AUTHORIZED_IPS: ${{ secrets.POSTMARK_WEBHOOK_AUTHORIZED_IPS }}
+
+        steps:
+            - name: 📥 Checkout repo
+              uses: actions/checkout@v4
+
+            - name: ⚙️ Setup supabase
+              uses: supabase/setup-cli@v1
+
+            - if: ${{ env.IS_SUPABASE_CONFIGURED }}
+              name: 🔗 Supabase Link
+              run: supabase link --project-ref "$SUPABASE_PROJECT_ID" --yes
+
+            - if: ${{ env.IS_SUPABASE_CONFIGURED }}
+              name: 📡 Push supabase migrations
+              run: supabase db push --yes
+
+            - if: ${{ env.IS_SUPABASE_CONFIGURED && env.POSTMARK_WEBHOOK_USER && env.POSTMARK_WEBHOOK_PASSWORD && env.POSTMARK_WEBHOOK_AUTHORIZED_IPS }}
+              name: 📡 Push supabase postmark webhook secrets
+              run: |
+                  supabase secrets set POSTMARK_WEBHOOK_USER="$POSTMARK_WEBHOOK_USER"
+                  supabase secrets set POSTMARK_WEBHOOK_PASSWORD="$POSTMARK_WEBHOOK_PASSWORD"
+                  supabase secrets set POSTMARK_WEBHOOK_AUTHORIZED_IPS="$POSTMARK_WEBHOOK_AUTHORIZED_IPS"
+                  supabase secrets set VITE_INBOUND_EMAIL="$VITE_INBOUND_EMAIL"
+                  supabase secrets set VITE_ATTACHMENTS_BUCKET="$VITE_ATTACHMENTS_BUCKET"
+
+            - if: ${{ env.IS_SUPABASE_CONFIGURED }}
+              name: 📡 Deploy supabase functions
+              run: supabase functions deploy --use-api
+
+            - if: ${{ !env.IS_SUPABASE_CONFIGURED }}
+              name: Supabase deployment skipped
+              run: echo ':warning:Supabase deployment skipped because SUPABASE_ACCESS_TOKEN, SUPABASE_DB_PASSWORD, or SUPABASE_PROJECT_ID is missing' >> $GITHUB_STEP_SUMMARY
