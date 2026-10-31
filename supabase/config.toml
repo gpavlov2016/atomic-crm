@@ -86,6 +86,8 @@ signing_keys_path = "./signing_keys.json"
 
 [auth.oauth_server]
 enabled = true
+# Path URL served by public/oauth/consent/index.html, which forwards to the
+# hash route /#/oauth/consent. GoTrue appends ?authorization_id to this path.
 authorization_url_path = "/oauth/consent"
 allow_dynamic_registration = true
 

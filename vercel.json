@@ -1,0 +1,12 @@
+{
+  "rewrites": [
+    {
+      "source": "/oauth/consent",
+      "destination": "/oauth/consent/index.html"
+    },
+    {
+      "source": "/oauth/consent/",
+      "destination": "/oauth/consent/index.html"
+    }
+  ]
+}

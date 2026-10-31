@@ -29,6 +29,21 @@
     <link rel="apple-touch-icon" sizes="192x192" href="./appIcon/192.png" />
     <link rel="apple-touch-icon" sizes="1024x1024" href="./appIcon/1024.png" />
     <title>Atomic CRM</title>
+    <script>
+      // Hash router only reads the fragment. /oauth/consent is outside it, and
+      // vite base "./" would load ./assets from /oauth/assets (404), leaving
+      // the HTML spinner up forever. Hand off before any module script runs.
+      (function () {
+        var marker = "/oauth/consent";
+        var path = window.location.pathname.replace(/\/+$/, "");
+        var idx = path.indexOf(marker);
+        if (idx === -1) return;
+        var base = path.slice(0, idx);
+        window.location.replace(
+          base + "/#/oauth/consent" + window.location.search,
+        );
+      })();
+    </script>
 
     <style>
       body {

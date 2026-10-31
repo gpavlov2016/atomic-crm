@@ -22,10 +22,35 @@ import {
  *
  * Inspired from https://supabase.com/docs/guides/auth/oauth-server/getting-started?queryGroups=oauth-setup&oauth-setup=dashboard#example-authorization-ui
  */
+function isPriorConsent(data: unknown): data is { redirect_url: string } {
+  if (data == null || typeof data !== "object") return false;
+  return (
+    "redirect_url" in data &&
+    typeof data.redirect_url === "string" &&
+    !("client" in data)
+  );
+}
+
+function isAuthorizationDetails(
+  data: unknown,
+): data is OAuthAuthorizationDetails {
+  if (data == null || typeof data !== "object") return false;
+  if (!("client" in data) || !("authorization_id" in data)) return false;
+  const client = data.client;
+  return (
+    client != null &&
+    typeof client === "object" &&
+    "name" in client &&
+    typeof client.name === "string"
+  );
+}
+
 export function OAuthConsentPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const authorizationId = searchParams.get("authorization_id");
+  const authorizationId =
+    searchParams.get("authorization_id") ??
+    new URLSearchParams(window.location.search).get("authorization_id");
   const authProvider = useAuthProvider();
   const translate = useTranslate();
 
@@ -53,26 +78,49 @@ export function OAuthConsentPage() {
       try {
         await authProvider.checkAuth({});
       } catch {
-        navigate(
-          `/login?redirect=/oauth/consent?authorization_id=${authorizationId}`,
-        );
+        navigate("/login", {
+          replace: true,
+          state: {
+            nextPathname: "/oauth/consent",
+            nextSearch: `?authorization_id=${encodeURIComponent(authorizationId)}`,
+          },
+        });
         return;
       }
 
       // Get authorization details using the authorization_id
-      const { data, error } =
-        await authProvider.getAuthorizationDetails(authorizationId);
+      try {
+        const { data, error } =
+          await authProvider.getAuthorizationDetails(authorizationId);
 
-      if (error) {
-        setError(error.message);
-      } else {
-        setAuthDetails(data as OAuthAuthorizationDetails);
+        if (cancelled) return;
+
+        if (error) {
+          setError(error.message);
+        } else if (isPriorConsent(data)) {
+          window.location.assign(data.redirect_url);
+          return;
+        } else if (isAuthorizationDetails(data)) {
+          setAuthDetails(data);
+        }
+      } catch (loadError) {
+        if (!cancelled) {
+          setError(
+            loadError instanceof Error
+              ? loadError.message
+              : "Authorization request failed",
+          );
+        }
       }
 
-      setLoading(false);
+      if (!cancelled) setLoading(false);
     }
 
+    let cancelled = false;
     loadAuthDetails();
+    return () => {
+      cancelled = true;
+    };
   }, [authProvider, authorizationId, navigate]);
 
   async function handleApprove() {

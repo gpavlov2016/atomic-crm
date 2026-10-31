@@ -32,6 +32,9 @@ export default defineConfig({
       workbox: {
         globPatterns: ["**/*.{js,css,html,ico,png,svg,woff,woff2}"],
         maximumFileSizeToCacheInBytes: 5 * 1024 * 1024, // 5 MiB
+        // Keep the static /oauth/consent handoff. The navigation fallback
+        // would replace it with index.html and break relative asset URLs.
+        navigateFallbackDenylist: [/\/oauth\/consent/],
       },
       manifest: false, // Use existing manifest.json from public/
     }),
