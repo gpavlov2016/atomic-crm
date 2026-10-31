@@ -287,8 +287,9 @@ const SettingsFormFields = () => {
                 </p>
                 <ImageEditorField
                   source="lightModeLogo"
-                  width={100}
-                  height={100}
+                  width={179}
+                  height={72}
+                  aspectRatio={221 / 89}
                   linkPosition="bottom"
                   backgroundImageColor="#f5f5f5"
                 />
@@ -299,8 +300,9 @@ const SettingsFormFields = () => {
                 </p>
                 <ImageEditorField
                   source="darkModeLogo"
-                  width={100}
-                  height={100}
+                  width={179}
+                  height={72}
+                  aspectRatio={221 / 89}
                   linkPosition="bottom"
                   backgroundImageColor="#1a1a1a"
                 />

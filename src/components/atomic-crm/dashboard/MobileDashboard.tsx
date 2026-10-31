@@ -14,14 +14,14 @@ const Wrapper = ({ children }: { children: React.ReactNode }) => {
   return (
     <>
       <MobileHeader>
-        <div className="flex items-center gap-2 text-secondary-foreground no-underline py-3">
+        <div className="flex items-center gap-2 text-secondary-foreground no-underline">
           <img
-            className="[.light_&]:hidden h-6"
+            className="[.light_&]:hidden h-8 w-auto shrink-0 object-contain"
             src={darkModeLogo}
             alt={title}
           />
           <img
-            className="[.dark_&]:hidden h-6"
+            className="[.dark_&]:hidden h-8 w-auto shrink-0 object-contain"
             src={lightModeLogo}
             alt={title}
           />
