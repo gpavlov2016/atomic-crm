@@ -33,6 +33,30 @@
       // Hash router only reads the fragment. /oauth/consent is outside it, and
       // vite base "./" would load ./assets from /oauth/assets (404), leaving
       // the HTML spinner up forever. Hand off before any module script runs.
+      // Supabase puts recovery tokens in the hash fragment. The hash router
+      // would replace that fragment with #/login and drop the tokens.
+      (function () {
+        var raw = window.location.hash.replace(/^#/, "");
+        if (!raw || raw.charAt(0) === "/") return;
+        var params = new URLSearchParams(raw);
+        var type = params.get("type");
+        var accessToken = params.get("access_token");
+        var refreshToken = params.get("refresh_token");
+        if (
+          (type !== "recovery" && type !== "invite") ||
+          !accessToken ||
+          !refreshToken
+        ) {
+          return;
+        }
+        var next = new URLSearchParams();
+        next.set("access_token", accessToken);
+        next.set("refresh_token", refreshToken);
+        next.set("type", type);
+        window.location.replace(
+          window.location.origin + "/#/set-password?" + next.toString(),
+        );
+      })();
       (function () {
         var marker = "/oauth/consent";
         var path = window.location.pathname.replace(/\/+$/, "");

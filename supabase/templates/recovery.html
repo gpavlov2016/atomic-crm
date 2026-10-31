@@ -60,7 +60,9 @@
         </p>
         <p>You can reset your password by clicking the button below.</p>
         <p>
-          <a href="{{ .ConfirmationURL }}/auth-callback.html" class="button"
+          <a
+            href="https://ixmkhvoznzgdrrtngpqf.supabase.co/auth/v1/verify?token={{ .TokenHash }}&type=recovery&redirect_to=https://atomic-crm.vercel.app/auth-callback.html"
+            class="button"
             >Reset your password</a
           >
         </p>
