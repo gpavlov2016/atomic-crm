@@ -97,6 +97,16 @@ jobs:
       timeout-minutes: 10
       runs-on: ubuntu-latest
       steps:
+      - name: Reserve Supabase host ports
+        # Local Supabase publishes 54320-54349. Those ports sit in the default
+        # ephemeral range (32768-60999), so an outbound connection during image
+        # pull can occupy one and container startup fails with
+        # "address already in use" (seen on inbucket port 54344).
+        run: |
+          sudo sysctl -w net.ipv4.ip_local_port_range="32768 54319"
+          if sudo sysctl net.ipv6.ip_local_port_range >/dev/null 2>&1; then
+            sudo sysctl -w net.ipv6.ip_local_port_range="32768 54319"
+          fi
       - name: 📥 Checkout repo
         uses: actions/checkout@v4
 
