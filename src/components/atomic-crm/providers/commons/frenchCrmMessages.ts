@@ -574,8 +574,9 @@ export const frenchCrmMessages = {
       gmail: {
         title: "Gmail",
         description:
-          "Connectez votre compte Gmail pour qu'un assistant puisse rechercher, lire et envoyer des e-mails en votre nom.",
+          "Connectez des comptes Gmail pour qu'un assistant puisse rechercher, lire et envoyer des e-mails en votre nom.",
         connect: "Connecter Gmail",
+        connect_another: "Connecter un autre compte",
         disconnect: "Déconnecter",
         connected: "Connecté en tant que %{email}",
         connect_error: "Impossible de démarrer la connexion Gmail. Réessayez.",
@@ -583,7 +584,7 @@ export const frenchCrmMessages = {
         disconnected: "Gmail est déconnecté",
         disconnect_error: "Impossible de déconnecter Gmail. Réessayez.",
         callback_error: "La connexion Gmail n'a pas abouti.",
-        status_error: "Impossible de charger la connexion Gmail.",
+        status_error: "Impossible de charger les connexions Gmail.",
       },
       password: {
         change: "Changer le mot de passe",

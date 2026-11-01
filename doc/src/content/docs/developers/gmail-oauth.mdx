@@ -1,11 +1,11 @@
 ---
 title: Gmail OAuth
-description: Connect each salesperson's Gmail account and call the mailbox API.
+description: Connect a salesperson's Gmail accounts and call a mailbox API.
 ---
 
-Each salesperson can connect their own Gmail account from the Profile page. Atomic CRM stores that link and exposes an HTTP API for search, read, send, and drafts. The CRM does not show an inbox, and it does not log these messages as notes. The existing [inbound email](./inbound-email-configuration) path is unchanged.
+Each salesperson can connect one or more Gmail accounts from the Profile page. Atomic CRM stores those links and exposes an HTTP API for search, read, send, and drafts. The CRM does not show an inbox, and it does not log these messages as notes. The existing [inbound email](./inbound-email-configuration) path is unchanged.
 
-The API is meant to be called with the same Supabase user access token your MCP server already receives. It always acts as that user's mailbox.
+The API is meant to be called with the same Supabase user access token your MCP server already receives. It acts as one of that user's mailboxes.
 
 Gmail scopes are restricted. Until Google verifies the OAuth app, only Google accounts listed as test users can connect.
 
@@ -51,15 +51,15 @@ For local functions, put the same variables in the gitignored repo-root `.env`. 
 
 ## What the user sees
 
-On Profile, **Connect Gmail** sends the signed-in salesperson to Google. After consent, Google redirects to the `gmail-oauth` function, which stores the mailbox link and sends the browser back to `/#/profile`. **Disconnect** revokes the refresh token and deletes the row.
+On Profile, **Connect Gmail** sends the signed-in salesperson to Google. Google shows an account picker, so a second connect can choose a different mailbox. After consent, Google redirects to the `gmail-oauth` function, which stores the mailbox link and sends the browser back to `/#/profile`. Connecting a Google account that is already linked refreshes that link. **Disconnect** on a row revokes that refresh token and deletes that row.
 
 The Profile card is hidden in the FakeRest demo.
 
 ## Stored connection
 
-`gmail_connections` holds one row per salesperson. Refresh tokens and cached access tokens are ciphertext. `anon` and `authenticated` have no privileges on that table, and row level security is enabled with no policies for those roles.
+`gmail_connections` holds one row per linked mailbox. A salesperson may have several. Rows are unique on `(sales_id, google_sub)` and on the salesperson's Gmail address. Refresh tokens and cached access tokens are ciphertext. `anon` and `authenticated` have no privileges on that table, and row level security is enabled with no policies for those roles.
 
-`gmail_connection_status` is the only client-readable surface. It returns `sales_id`, `google_email`, and `connected_at` for the salesperson whose `user_id` is `auth.uid()`.
+`gmail_connection_status` is the only client-readable surface. It returns `sales_id`, `google_email`, and `connected_at` for every mailbox whose salesperson has `user_id` equal to `auth.uid()`.
 
 ## HTTP API
 
@@ -75,7 +75,7 @@ Base URL: `https://<project-ref>.supabase.co/functions/v1`
 | --- | --- | --- |
 | `POST /gmail-oauth/start` | empty | `{ "url": "<google consent url>" }` |
 | `GET /gmail-oauth/callback` | Google sends `code` and `state` | Redirect to `{CRM_BASE_URL}/#/profile?gmail=connected` or `gmail=error` |
-| `POST /gmail-oauth/disconnect` | empty | `{ "disconnected": true }` |
+| `POST /gmail-oauth/disconnect` | `{ "googleEmail" }` optional when only one account is linked | `{ "disconnected": true }` |
 
 ### Mailbox
 
@@ -83,13 +83,15 @@ Base URL: `https://<project-ref>.supabase.co/functions/v1`
 
 | Request | Body | Result |
 | --- | --- | --- |
-| `GET /gmail/status` | | `{ "connected": false }` or `{ "connected": true, "googleEmail", "connectedAt" }` |
-| `POST /gmail/search` | `{ "q", "maxResults", "pageToken" }` | `{ "messages": [{ "id", "threadId", "snippet" }], "nextPageToken" }` |
-| `GET /gmail/messages/:id` | | Headers, `text`, `html`, and attachment metadata (`filename`, `mimeType`, `size`, `attachmentId`) |
-| `GET /gmail/messages/:id/attachments/:attachmentId` | | `{ "data", "size" }` where `data` is standard base64 |
-| `POST /gmail/send` | `{ "to", "cc", "bcc", "subject", "text", "html", "threadId", "inReplyTo" }` | `{ "id", "threadId" }` |
+| `GET /gmail/status` | | `{ "connected", "connections": [{ "googleEmail", "connectedAt" }] }`. When exactly one account is linked, the body also includes `googleEmail` and `connectedAt`. |
+| `POST /gmail/search` | `{ "q", "maxResults", "pageToken", "googleEmail" }` | `{ "messages": [{ "id", "threadId", "snippet" }], "nextPageToken" }` |
+| `GET /gmail/messages/:id` | optional `googleEmail` query parameter | Headers, `text`, `html`, and attachment metadata (`filename`, `mimeType`, `size`, `attachmentId`) |
+| `GET /gmail/messages/:id/attachments/:attachmentId` | optional `googleEmail` query parameter | `{ "data", "size" }` where `data` is standard base64 |
+| `POST /gmail/send` | `{ "to", "cc", "bcc", "subject", "text", "html", "threadId", "inReplyTo", "googleEmail" }` | `{ "id", "threadId" }` |
 | `POST /gmail/drafts` | same as send | `{ "id", "messageId", "threadId" }` |
+
+`googleEmail` chooses the mailbox. Omit it when the salesperson has exactly one linked account, and that account is used. When several accounts are linked and `googleEmail` is omitted, the response is `409` with `{ "status": 409, "message": "Multiple Gmail accounts are connected. Pass googleEmail.", "googleEmails": ["..."] }`. An address that is not linked is `409` with `{ "status": 409, "message": "That Gmail account is not connected" }`.
 
 `q` is [Gmail search syntax](https://support.google.com/mail/answer/7190). `maxResults` defaults to 20 and is capped at 50. Address fields are plain email addresses, or arrays of them. Provide `text` or `html` (or both). Send and drafts do not upload attachments.
 
-A missing mailbox returns `409` with `{ "status": 409, "message": "Gmail is not connected" }`. Ask the user to connect Gmail from Profile.
+No linked mailbox returns `409` with `{ "status": 409, "message": "Gmail is not connected" }`. Ask the user to connect Gmail from Profile.

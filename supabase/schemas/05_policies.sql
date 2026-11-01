@@ -72,4 +72,4 @@ create policy "Enable access for authenticated users only" on public.favicons_ex
 -- gmail_connections has no policies for anon or authenticated. Combined with
 -- the grants file, those roles cannot read or write token rows. The
 -- gmail_connection_status view is the client-readable surface, and it only
--- returns the row whose salesperson matches auth.uid().
+-- returns the rows whose salesperson matches auth.uid().

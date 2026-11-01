@@ -16,16 +16,16 @@ const GmailConnectionCardContent = () => {
   const notify = useNotify();
   const [searchParams, setSearchParams] = useSearchParams();
   const reportedResult = useRef<string | null>(null);
-  const [pending, setPending] = useState<"connect" | "disconnect" | null>(null);
+  const [pending, setPending] = useState<string | null>(null);
   const statusQuery = useQuery({
     queryKey: ["gmail-connection"],
     queryFn: async () => {
       const { data, error } = await getSupabaseClient()
         .from("gmail_connection_status")
         .select("google_email, connected_at")
-        .maybeSingle();
+        .order("connected_at", { ascending: true });
       if (error) throw error;
-      return data;
+      return data ?? [];
     },
   });
 
@@ -71,11 +71,11 @@ const GmailConnectionCardContent = () => {
     window.location.assign(data.url);
   };
 
-  const disconnect = async () => {
-    setPending("disconnect");
+  const disconnect = async (googleEmail: string) => {
+    setPending(googleEmail);
     const { error } = await getSupabaseClient().functions.invoke(
       "gmail-oauth/disconnect",
-      { method: "POST" },
+      { method: "POST", body: { googleEmail } },
     );
     setPending(null);
     if (error) {
@@ -92,7 +92,7 @@ const GmailConnectionCardContent = () => {
     await statusQuery.refetch();
   };
 
-  const connectedEmail = statusQuery.data?.google_email;
+  const connections = statusQuery.data ?? [];
 
   return (
     <Card>
@@ -103,45 +103,57 @@ const GmailConnectionCardContent = () => {
           </h2>
           <p className="text-sm text-muted-foreground">
             {translate("crm.profile.gmail.description", {
-              _: "Connect your Gmail account so an assistant can search, read, and send mail as you.",
+              _: "Connect Gmail accounts so an assistant can search, read, and send mail as you.",
             })}
           </p>
           {statusQuery.isError ? (
             <p className="text-sm text-destructive">
               {translate("crm.profile.gmail.status_error", {
-                _: "Could not load the Gmail connection.",
+                _: "Could not load Gmail connections.",
               })}
             </p>
           ) : null}
-          {statusQuery.isPending ? null : connectedEmail ? (
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <p className="text-sm font-medium">
-                {translate("crm.profile.gmail.connected", {
-                  _: "Connected as %{email}",
-                  email: connectedEmail,
-                })}
-              </p>
+          {statusQuery.isPending ? null : (
+            <div className="space-y-3">
+              {connections.map((connection) => (
+                <div
+                  key={connection.google_email}
+                  className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
+                >
+                  <p className="text-sm font-medium">
+                    {translate("crm.profile.gmail.connected", {
+                      _: "Connected as %{email}",
+                      email: connection.google_email,
+                    })}
+                  </p>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full sm:w-auto"
+                    disabled={pending !== null}
+                    onClick={() => void disconnect(connection.google_email)}
+                  >
+                    {translate("crm.profile.gmail.disconnect", {
+                      _: "Disconnect",
+                    })}
+                  </Button>
+                </div>
+              ))}
               <Button
                 type="button"
-                variant="outline"
                 className="w-full sm:w-auto"
                 disabled={pending !== null}
-                onClick={() => void disconnect()}
+                onClick={() => void connect()}
               >
-                {translate("crm.profile.gmail.disconnect", {
-                  _: "Disconnect",
-                })}
+                {connections.length > 0
+                  ? translate("crm.profile.gmail.connect_another", {
+                      _: "Connect another account",
+                    })
+                  : translate("crm.profile.gmail.connect", {
+                      _: "Connect Gmail",
+                    })}
               </Button>
             </div>
-          ) : (
-            <Button
-              type="button"
-              className="w-full sm:w-auto"
-              disabled={pending !== null}
-              onClick={() => void connect()}
-            >
-              {translate("crm.profile.gmail.connect", { _: "Connect Gmail" })}
-            </Button>
           )}
         </div>
       </CardContent>

@@ -566,8 +566,9 @@ export const englishCrmMessages = {
       gmail: {
         title: "Gmail",
         description:
-          "Connect your Gmail account so an assistant can search, read, and send mail as you.",
+          "Connect Gmail accounts so an assistant can search, read, and send mail as you.",
         connect: "Connect Gmail",
+        connect_another: "Connect another account",
         disconnect: "Disconnect",
         connected: "Connected as %{email}",
         connect_error: "Could not start the Gmail connection. Try again.",
@@ -575,7 +576,7 @@ export const englishCrmMessages = {
         disconnected: "Gmail disconnected",
         disconnect_error: "Could not disconnect Gmail. Try again.",
         callback_error: "Gmail connection was not completed.",
-        status_error: "Could not load the Gmail connection.",
+        status_error: "Could not load Gmail connections.",
       },
       password: {
         change: "Change password",

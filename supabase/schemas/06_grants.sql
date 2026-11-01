@@ -113,6 +113,13 @@ revoke all on table public.gmail_connections from anon;
 revoke all on table public.gmail_connections from authenticated;
 grant all on table public.gmail_connections to service_role;
 
+-- The identity sequence is created with the table. Default privileges would
+-- hand it to anon and authenticated; only the service role inserts rows.
+revoke all on sequence public.gmail_connections_id_seq from public;
+revoke all on sequence public.gmail_connections_id_seq from anon;
+revoke all on sequence public.gmail_connections_id_seq from authenticated;
+grant all on sequence public.gmail_connections_id_seq to service_role;
+
 -- View grants
 grant all on table public.activity_log to anon;
 grant all on table public.activity_log to authenticated;

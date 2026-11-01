@@ -4,11 +4,14 @@ import { UserMiddleware } from "../_shared/authentication.ts";
 import { getUserSale } from "../_shared/getUserSale.ts";
 import {
   accessTokenFor,
+  GmailAccountAmbiguous,
   GmailApiError,
   GmailAuthError,
   GmailConfigError,
+  GmailNotConnected,
   gmailRequest,
-  loadGmailConnection,
+  listGmailConnections,
+  pickGmailConnection,
 } from "../_shared/gmail/gmailAccess.ts";
 import {
   attachmentBytesToBase64,
@@ -59,13 +62,6 @@ Deno.serve(async (req) => {
   }
 });
 
-class GmailNotConnected extends Error {
-  constructor() {
-    super("Gmail is not connected");
-    this.name = "GmailNotConnected";
-  }
-}
-
 async function handle(
   req: Request,
   user: User,
@@ -77,23 +73,32 @@ async function handle(
   switch (route.kind) {
     case "status":
       return connectionStatus(sale.id);
-    case "search":
-      return searchMessages(await mailboxToken(sale.id), await readJson(req));
-    case "send":
+    case "search": {
+      const body = await readJson(req);
+      return searchMessages(await mailboxToken(sale.id, body), body);
+    }
+    case "send": {
+      const body = await readJson(req);
       return sendMessage(
-        await mailboxToken(sale.id),
-        parseOutgoing(await readJson(req)),
+        await mailboxToken(sale.id, body),
+        parseOutgoing(body),
       );
-    case "draft":
+    }
+    case "draft": {
+      const body = await readJson(req);
       return createDraft(
-        await mailboxToken(sale.id),
-        parseOutgoing(await readJson(req)),
+        await mailboxToken(sale.id, body),
+        parseOutgoing(body),
       );
+    }
     case "message":
-      return readMessage(await mailboxToken(sale.id), route.messageId);
+      return readMessage(
+        await mailboxToken(sale.id, googleEmailQuery(req)),
+        route.messageId,
+      );
     case "attachment":
       return readAttachment(
-        await mailboxToken(sale.id),
+        await mailboxToken(sale.id, googleEmailQuery(req)),
         route.messageId,
         route.attachmentId,
       );
@@ -105,19 +110,44 @@ async function handle(
 }
 
 async function connectionStatus(salesId: number): Promise<Response> {
-  const row = await loadGmailConnection(salesId);
-  if (!row) return jsonResponse(200, { connected: false });
-  return jsonResponse(200, {
-    connected: true,
+  const rows = await listGmailConnections(salesId);
+  const connections = rows.map((row) => ({
     googleEmail: row.google_email,
     connectedAt: row.connected_at,
+  }));
+  if (rows.length !== 1) {
+    return jsonResponse(200, {
+      connected: rows.length > 0,
+      connections,
+    });
+  }
+  return jsonResponse(200, {
+    connected: true,
+    googleEmail: rows[0].google_email,
+    connectedAt: rows[0].connected_at,
+    connections,
   });
 }
 
-async function mailboxToken(salesId: number): Promise<string> {
-  const row = await loadGmailConnection(salesId);
-  if (!row) throw new GmailNotConnected();
+async function mailboxToken(salesId: number, source: unknown): Promise<string> {
+  const rows = await listGmailConnections(salesId);
+  const row = pickGmailConnection(rows, googleEmailValue(source));
   return accessTokenFor(row);
+}
+
+function googleEmailQuery(req: Request): string | undefined {
+  return new URL(req.url).searchParams.get("googleEmail") ?? undefined;
+}
+
+function googleEmailValue(source: unknown): string | undefined {
+  if (typeof source === "string" || source === undefined) return source;
+  const record = recordBody(source);
+  const email = record.googleEmail;
+  if (email === undefined || email === null) return undefined;
+  if (typeof email !== "string") {
+    throw new MailInputError("googleEmail must be a string");
+  }
+  return email;
 }
 
 function matchRoute(method: string, path: string): GmailRoute {
@@ -303,6 +333,13 @@ function optionalString(value: unknown, field: string): string | undefined {
 }
 
 function failure(error: unknown): Response {
+  if (error instanceof GmailAccountAmbiguous) {
+    return jsonResponse(409, {
+      status: 409,
+      message: error.message,
+      googleEmails: error.emails,
+    });
+  }
   if (error instanceof GmailNotConnected) {
     return errorResponse(409, error.message);
   }

@@ -32,7 +32,7 @@ export function buildGoogleConsentUrl(input: {
   url.searchParams.set("response_type", "code");
   url.searchParams.set("scope", GMAIL_OAUTH_SCOPES.join(" "));
   url.searchParams.set("access_type", "offline");
-  url.searchParams.set("prompt", "consent");
+  url.searchParams.set("prompt", "select_account consent");
   url.searchParams.set("include_granted_scopes", "true");
   url.searchParams.set("state", input.state);
   return url.toString();

@@ -6,9 +6,12 @@ import { supabaseAdmin } from "../_shared/supabaseAdmin.ts";
 import {
   disconnectGmail,
   exchangeAuthorizationCode,
+  GmailAccountAmbiguous,
   GmailConfigError,
+  GmailNotConnected,
   gmailOAuthConfig,
-  loadGmailConnection,
+  listGmailConnections,
+  pickGmailConnection,
   profileRedirect,
   saveGmailConnection,
 } from "../_shared/gmail/gmailAccess.ts";
@@ -40,9 +43,9 @@ Deno.serve(async (req) => {
       });
     }
     if (req.method === "POST" && path === "/disconnect") {
-      return await UserMiddleware(req, (_request, user) => {
+      return await UserMiddleware(req, (request, user) => {
         if (!user) return errorResponse(401, "Unauthorized");
-        return handleDisconnect(user);
+        return handleDisconnect(request, user);
       });
     }
     return errorResponse(404, "Not found");
@@ -116,15 +119,74 @@ async function handleCallback(req: Request): Promise<Response> {
   }
 }
 
-async function handleDisconnect(user: User): Promise<Response> {
+async function handleDisconnect(req: Request, user: User): Promise<Response> {
   const sale = await getUserSale(user);
   if (!sale) return errorResponse(403, "No salesperson profile for this user");
-  const row = await loadGmailConnection(sale.id);
-  if (row) await disconnectGmail(row);
+  const googleEmail = await googleEmailFromBody(req);
+  const rows = await listGmailConnections(sale.id);
+  try {
+    const row = pickGmailConnection(rows, googleEmail);
+    await disconnectGmail(row);
+  } catch (error) {
+    if (
+      error instanceof GmailNotConnected &&
+      rows.length === 0 &&
+      !googleEmail?.trim()
+    ) {
+      return jsonResponse(200, { disconnected: true });
+    }
+    const selected = selectionError(error);
+    if (selected) return selected;
+    throw error;
+  }
   return jsonResponse(200, { disconnected: true });
 }
 
+async function googleEmailFromBody(req: Request): Promise<string | undefined> {
+  const text = await req.text();
+  if (text.trim() === "") return undefined;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    throw new GoogleEmailFieldError("Request body must be JSON");
+  }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new GoogleEmailFieldError("Request body must be a JSON object");
+  }
+  const email = (parsed as Record<string, unknown>).googleEmail;
+  if (email === undefined || email === null) return undefined;
+  if (typeof email !== "string") {
+    throw new GoogleEmailFieldError("googleEmail must be a string");
+  }
+  return email;
+}
+
+class GoogleEmailFieldError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "GoogleEmailFieldError";
+  }
+}
+
+function selectionError(error: unknown): Response | null {
+  if (error instanceof GmailAccountAmbiguous) {
+    return jsonResponse(409, {
+      status: 409,
+      message: error.message,
+      googleEmails: error.emails,
+    });
+  }
+  if (error instanceof GmailNotConnected) {
+    return errorResponse(409, error.message);
+  }
+  return null;
+}
+
 function failure(error: unknown): Response {
+  if (error instanceof GoogleEmailFieldError) {
+    return errorResponse(400, error.message);
+  }
   if (error instanceof GmailConfigError) {
     return errorResponse(500, error.message);
   }

@@ -26,7 +26,7 @@ describe("google oauth requests", () => {
       }),
     );
     expect(url.searchParams.get("access_type")).toBe("offline");
-    expect(url.searchParams.get("prompt")).toBe("consent");
+    expect(url.searchParams.get("prompt")).toBe("select_account consent");
     expect(url.searchParams.get("state")).toBe("signed-state");
     expect(url.searchParams.get("redirect_uri")).toBe(
       "https://example.test/callback",

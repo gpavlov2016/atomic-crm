@@ -1,4 +1,9 @@
 import { supabaseAdmin } from "../supabaseAdmin.ts";
+import {
+  GmailAccountAmbiguous,
+  GmailNotConnected,
+  pickGmailConnection,
+} from "./mailboxSelection.ts";
 import { decodeTokenKey, decryptToken, encryptToken } from "./tokenCrypto.ts";
 import {
   buildCodeExchangeBody,
@@ -37,6 +42,7 @@ export class GmailApiError extends Error {
 }
 
 export type GmailConnectionRow = {
+  id: number;
   sales_id: number;
   google_email: string;
   connected_at: string;
@@ -44,6 +50,8 @@ export type GmailConnectionRow = {
   access_token_ciphertext: string | null;
   access_token_expires_at: string | null;
 };
+
+export { GmailAccountAmbiguous, GmailNotConnected, pickGmailConnection };
 
 type TokenResponse = {
   access_token?: string;
@@ -154,23 +162,23 @@ export async function saveGmailConnection(input: {
       ).toISOString(),
       updated_at: new Date().toISOString(),
     },
-    { onConflict: "sales_id" },
+    { onConflict: "sales_id,google_sub" },
   );
   if (error) throw error;
 }
 
-export async function loadGmailConnection(
+export async function listGmailConnections(
   salesId: number,
-): Promise<GmailConnectionRow | null> {
+): Promise<GmailConnectionRow[]> {
   const { data, error } = await supabaseAdmin
     .from("gmail_connections")
     .select(
-      "sales_id, google_email, connected_at, refresh_token_ciphertext, access_token_ciphertext, access_token_expires_at",
+      "id, sales_id, google_email, connected_at, refresh_token_ciphertext, access_token_ciphertext, access_token_expires_at",
     )
     .eq("sales_id", salesId)
-    .maybeSingle();
+    .order("connected_at", { ascending: true });
   if (error) throw error;
-  return data;
+  return data ?? [];
 }
 
 export async function accessTokenFor(row: GmailConnectionRow): Promise<string> {
@@ -212,7 +220,7 @@ export async function accessTokenFor(row: GmailConnectionRow): Promise<string> {
       ).toISOString(),
       updated_at: new Date().toISOString(),
     })
-    .eq("sales_id", row.sales_id);
+    .eq("id", row.id);
   if (error) throw error;
   return token.access_token;
 }
@@ -238,7 +246,7 @@ export async function disconnectGmail(row: GmailConnectionRow): Promise<void> {
   const { error } = await supabaseAdmin
     .from("gmail_connections")
     .delete()
-    .eq("sales_id", row.sales_id);
+    .eq("id", row.id);
   if (error) throw error;
 }
 
