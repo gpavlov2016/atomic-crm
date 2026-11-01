@@ -1,0 +1,95 @@
+---
+title: Gmail OAuth
+description: Connect each salesperson's Gmail account and call the mailbox API.
+---
+
+Each salesperson can connect their own Gmail account from the Profile page. Atomic CRM stores that link and exposes an HTTP API for search, read, send, and drafts. The CRM does not show an inbox, and it does not log these messages as notes. The existing [inbound email](./inbound-email-configuration) path is unchanged.
+
+The API is meant to be called with the same Supabase user access token your MCP server already receives. It always acts as that user's mailbox.
+
+Gmail scopes are restricted. Until Google verifies the OAuth app, only Google accounts listed as test users can connect.
+
+## Google Cloud
+
+1. In [Google Cloud Console](https://console.cloud.google.com/), create or select a project.
+2. Configure the OAuth consent screen. Add the scopes below. While the app is in testing, add every Google account that will connect as a test user.
+3. Create an OAuth client of type **Web application**.
+4. Add this authorized redirect URI, using your Supabase project URL:
+
+```text
+https://<project-ref>.supabase.co/functions/v1/gmail-oauth/callback
+```
+
+For the local Supabase stack the redirect URI is:
+
+```text
+http://127.0.0.1:55321/functions/v1/gmail-oauth/callback
+```
+
+The consent screen requests these scopes:
+
+- `openid` and `email`, to record which Google account was connected
+- `https://www.googleapis.com/auth/gmail.readonly`, to search and read
+- `https://www.googleapis.com/auth/gmail.send`, to send
+- `https://www.googleapis.com/auth/gmail.compose`, to create a draft
+
+## Supabase secrets
+
+Set these as Edge Function secrets. Do not put them in the frontend or in git.
+
+```sh
+npx supabase secrets set GOOGLE_OAUTH_CLIENT_ID=<client id>
+npx supabase secrets set GOOGLE_OAUTH_CLIENT_SECRET=<client secret>
+npx supabase secrets set GMAIL_TOKEN_KEY=<base64 of 32 bytes>
+npx supabase secrets set GMAIL_OAUTH_STATE_SECRET=<random string>
+npx supabase secrets set CRM_BASE_URL=<public CRM URL>
+```
+
+`GMAIL_TOKEN_KEY` encrypts Google refresh tokens at rest. Generate it with `openssl rand -base64 32`. `CRM_BASE_URL` is where the browser returns after consent, for example `http://localhost:5173` locally or your production origin. It must not have a trailing path.
+
+For local functions, put the same variables in the gitignored repo-root `.env`. `config.toml` injects them through `[edge_runtime.secrets]`. The callback path is `{public origin}/functions/v1/gmail-oauth/callback`. Locally the function runtime's `SUPABASE_URL` is the internal Kong address, so the public origin is taken from `SB_JWT_ISSUER`.
+
+## What the user sees
+
+On Profile, **Connect Gmail** sends the signed-in salesperson to Google. After consent, Google redirects to the `gmail-oauth` function, which stores the mailbox link and sends the browser back to `/#/profile`. **Disconnect** revokes the refresh token and deletes the row.
+
+The Profile card is hidden in the FakeRest demo.
+
+## Stored connection
+
+`gmail_connections` holds one row per salesperson. Refresh tokens and cached access tokens are ciphertext. `anon` and `authenticated` have no privileges on that table, and row level security is enabled with no policies for those roles.
+
+`gmail_connection_status` is the only client-readable surface. It returns `sales_id`, `google_email`, and `connected_at` for the salesperson whose `user_id` is `auth.uid()`.
+
+## HTTP API
+
+Send the user's Supabase access token as `Authorization: Bearer <token>`. The functions resolve that token to a salesperson and never accept a `sales_id` in the body. Responses never include Google tokens.
+
+Base URL: `https://<project-ref>.supabase.co/functions/v1`
+
+### Connect
+
+`gmail-oauth` does not require a JWT at the gateway, because Google's redirect has none. `POST /start` and `POST /disconnect` still require the user JWT.
+
+| Request | Body | Result |
+| --- | --- | --- |
+| `POST /gmail-oauth/start` | empty | `{ "url": "<google consent url>" }` |
+| `GET /gmail-oauth/callback` | Google sends `code` and `state` | Redirect to `{CRM_BASE_URL}/#/profile?gmail=connected` or `gmail=error` |
+| `POST /gmail-oauth/disconnect` | empty | `{ "disconnected": true }` |
+
+### Mailbox
+
+`gmail` requires a valid user JWT at the gateway.
+
+| Request | Body | Result |
+| --- | --- | --- |
+| `GET /gmail/status` | | `{ "connected": false }` or `{ "connected": true, "googleEmail", "connectedAt" }` |
+| `POST /gmail/search` | `{ "q", "maxResults", "pageToken" }` | `{ "messages": [{ "id", "threadId", "snippet" }], "nextPageToken" }` |
+| `GET /gmail/messages/:id` | | Headers, `text`, `html`, and attachment metadata (`filename`, `mimeType`, `size`, `attachmentId`) |
+| `GET /gmail/messages/:id/attachments/:attachmentId` | | `{ "data", "size" }` where `data` is standard base64 |
+| `POST /gmail/send` | `{ "to", "cc", "bcc", "subject", "text", "html", "threadId", "inReplyTo" }` | `{ "id", "threadId" }` |
+| `POST /gmail/drafts` | same as send | `{ "id", "messageId", "threadId" }` |
+
+`q` is [Gmail search syntax](https://support.google.com/mail/answer/7190). `maxResults` defaults to 20 and is capped at 50. Address fields are plain email addresses, or arrays of them. Provide `text` or `html` (or both). Send and drafts do not upload attachments.
+
+A missing mailbox returns `409` with `{ "status": 409, "message": "Gmail is not connected" }`. Ask the user to connect Gmail from Profile.

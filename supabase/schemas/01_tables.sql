@@ -131,6 +131,20 @@ create table public.favicons_excluded_domains (
     domain text not null
 );
 
+-- One Gmail mailbox per salesperson. Token columns are ciphertext and are not
+-- granted to the API roles; edge functions read them with the service role.
+create table public.gmail_connections (
+    sales_id bigint not null primary key,
+    google_email text not null,
+    google_sub text not null,
+    scopes text[] not null,
+    refresh_token_ciphertext text not null,
+    access_token_ciphertext text,
+    access_token_expires_at timestamp with time zone,
+    connected_at timestamp with time zone not null default now(),
+    updated_at timestamp with time zone not null default now()
+);
+
 --
 -- Foreign keys
 --
@@ -167,6 +181,9 @@ alter table public.sales
 
 alter table public.tasks
     add constraint tasks_contact_id_fkey foreign key (contact_id) references public.contacts(id) on update cascade on delete cascade;
+
+alter table public.gmail_connections
+    add constraint gmail_connections_sales_id_fkey foreign key (sales_id) references public.sales(id) on delete cascade;
 
 -- Legacy primary key constraint names (from before snake_case rename)
 alter table only public.contact_notes

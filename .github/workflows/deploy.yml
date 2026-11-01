@@ -109,6 +109,10 @@ jobs:
             POSTMARK_WEBHOOK_USER: ${{ secrets.POSTMARK_WEBHOOK_USER }}
             POSTMARK_WEBHOOK_PASSWORD: ${{ secrets.POSTMARK_WEBHOOK_PASSWORD }}
             POSTMARK_WEBHOOK_AUTHORIZED_IPS: ${{ secrets.POSTMARK_WEBHOOK_AUTHORIZED_IPS }}
+            GOOGLE_OAUTH_CLIENT_ID: ${{ secrets.GOOGLE_OAUTH_CLIENT_ID }}
+            GOOGLE_OAUTH_CLIENT_SECRET: ${{ secrets.GOOGLE_OAUTH_CLIENT_SECRET }}
+            GMAIL_TOKEN_KEY: ${{ secrets.GMAIL_TOKEN_KEY }}
+            GMAIL_OAUTH_STATE_SECRET: ${{ secrets.GMAIL_OAUTH_STATE_SECRET }}
 
         steps:
             - name: 📥 Checkout repo
@@ -135,6 +139,14 @@ jobs:
                   supabase secrets set POSTMARK_WEBHOOK_AUTHORIZED_IPS="$POSTMARK_WEBHOOK_AUTHORIZED_IPS"
                   supabase secrets set VITE_INBOUND_EMAIL="$VITE_INBOUND_EMAIL"
                   supabase secrets set VITE_ATTACHMENTS_BUCKET="$VITE_ATTACHMENTS_BUCKET"
+
+            - if: ${{ env.IS_SUPABASE_CONFIGURED && env.GOOGLE_OAUTH_CLIENT_ID && env.GOOGLE_OAUTH_CLIENT_SECRET && env.GMAIL_TOKEN_KEY && env.GMAIL_OAUTH_STATE_SECRET }}
+              name: 📡 Push Gmail OAuth secrets
+              run: |
+                  supabase secrets set GOOGLE_OAUTH_CLIENT_ID="$GOOGLE_OAUTH_CLIENT_ID"
+                  supabase secrets set GOOGLE_OAUTH_CLIENT_SECRET="$GOOGLE_OAUTH_CLIENT_SECRET"
+                  supabase secrets set GMAIL_TOKEN_KEY="$GMAIL_TOKEN_KEY"
+                  supabase secrets set GMAIL_OAUTH_STATE_SECRET="$GMAIL_OAUTH_STATE_SECRET"
 
             - if: ${{ env.IS_SUPABASE_CONFIGURED }}
               name: 📡 Deploy supabase functions

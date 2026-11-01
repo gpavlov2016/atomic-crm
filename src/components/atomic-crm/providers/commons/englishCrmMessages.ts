@@ -563,6 +563,20 @@ export const englishCrmMessages = {
         description:
           "Use this URL to connect your AI assistant to your CRM data via the Model Context Protocol (MCP).",
       },
+      gmail: {
+        title: "Gmail",
+        description:
+          "Connect your Gmail account so an assistant can search, read, and send mail as you.",
+        connect: "Connect Gmail",
+        disconnect: "Disconnect",
+        connected: "Connected as %{email}",
+        connect_error: "Could not start the Gmail connection. Try again.",
+        connected_success: "Gmail connected",
+        disconnected: "Gmail disconnected",
+        disconnect_error: "Could not disconnect Gmail. Try again.",
+        callback_error: "Gmail connection was not completed.",
+        status_error: "Could not load the Gmail connection.",
+      },
       password: {
         change: "Change password",
       },

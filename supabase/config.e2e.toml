@@ -166,3 +166,7 @@ verify_jwt = false
 verify_jwt = false
 [functions.users]
 verify_jwt = false
+[functions.gmail-oauth]
+verify_jwt = false
+[functions.gmail]
+verify_jwt = true

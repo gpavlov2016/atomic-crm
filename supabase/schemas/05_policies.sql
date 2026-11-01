@@ -14,6 +14,7 @@ alter table public.tags enable row level security;
 alter table public.tasks enable row level security;
 alter table public.configuration enable row level security;
 alter table public.favicons_excluded_domains enable row level security;
+alter table public.gmail_connections enable row level security;
 
 -- Companies
 create policy "Enable read access for authenticated users" on public.companies for select to authenticated using (true);
@@ -67,3 +68,8 @@ create policy "Enable update for admins" on public.configuration for update to a
 
 -- Favicons excluded domains
 create policy "Enable access for authenticated users only" on public.favicons_excluded_domains to authenticated using (true) with check (true);
+
+-- gmail_connections has no policies for anon or authenticated. Combined with
+-- the grants file, those roles cannot read or write token rows. The
+-- gmail_connection_status view is the client-readable surface, and it only
+-- returns the row whose salesperson matches auth.uid().

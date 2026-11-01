@@ -106,6 +106,13 @@ grant all on table public.favicons_excluded_domains to anon;
 grant all on table public.favicons_excluded_domains to authenticated;
 grant all on table public.favicons_excluded_domains to service_role;
 
+-- Default privileges grant new tables to anon and authenticated. Take that
+-- back for the mailbox table so ciphertext never reaches the Data API.
+revoke all on table public.gmail_connections from public;
+revoke all on table public.gmail_connections from anon;
+revoke all on table public.gmail_connections from authenticated;
+grant all on table public.gmail_connections to service_role;
+
 -- View grants
 grant all on table public.activity_log to anon;
 grant all on table public.activity_log to authenticated;
@@ -122,6 +129,9 @@ grant all on table public.contacts_summary to service_role;
 grant all on table public.init_state to anon;
 grant all on table public.init_state to authenticated;
 grant all on table public.init_state to service_role;
+
+grant select on table public.gmail_connection_status to authenticated;
+grant all on table public.gmail_connection_status to service_role;
 
 -- Sequence grants
 grant all on sequence public.companies_id_seq to anon;

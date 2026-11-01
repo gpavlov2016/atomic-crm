@@ -38,6 +38,7 @@ import ImageEditorField from "../misc/ImageEditorField";
 import type { CrmDataProvider } from "../providers/types";
 import { getSalesErrorNotification } from "../sales/salesErrorNotification";
 import type { Sale, SalesFormData } from "../types";
+import { GmailConnectionCard } from "./GmailConnectionCard";
 
 export const ProfilePage = () => {
   const [isEditMode, setEditMode] = useState(false);
@@ -254,6 +255,7 @@ const ProfileForm = ({
           </CardContent>
         </Card>
       )}
+      <GmailConnectionCard />
       <Card>
         <CardContent>
           <div className="space-y-4 justify-between">

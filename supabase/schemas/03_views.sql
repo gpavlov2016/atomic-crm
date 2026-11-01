@@ -132,3 +132,16 @@ select count(sub.id) as is_initialized
 from (
     select sales.id from public.sales limit 1
 ) sub;
+
+-- Runs as the view owner so the API roles do not need privileges on
+-- gmail_connections (that table holds ciphertext). security_barrier keeps the
+-- auth.uid() predicate from being pushed down in a way that leaks other rows.
+create or replace view public.gmail_connection_status
+with (security_invoker = off, security_barrier = on) as
+select
+    gc.sales_id,
+    gc.google_email,
+    gc.connected_at
+from public.gmail_connections gc
+    inner join public.sales s on s.id = gc.sales_id
+where s.user_id = auth.uid();
